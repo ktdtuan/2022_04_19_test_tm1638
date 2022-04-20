@@ -20,7 +20,8 @@
         "bitset": "cpp",
         "regex": "cpp",
         "typeinfo": "cpp",
-        "cmath": "cpp"
+        "cmath": "cpp",
+        "ostream": "cpp"
     },
     "bracket-pair-colorizer-2.colorMode" : "Independent",
     "bracket-pair-colorizer-2.colors": [

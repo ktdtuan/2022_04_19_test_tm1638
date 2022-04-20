@@ -26,12 +26,8 @@ using ace_segment::Tm1638Module;
 using ace_tmi::SimpleTmi1638Interface;
 
 // Set to 1 to get diagnostic info.
-#define ENABLE_SERIAL_DEBUG 0
+#define ENABLE_SERIAL_DEBUG 1
 
-// Select TM1638 protocol version, either SimpleTmi1638Interface or
-// SimpleTmi1638FastInterface.
-#define TMI_INTERFACE_TYPE_NORMAL 0
-#define TMI_INTERFACE_TYPE_FAST 1
 
 // Number of digits in the TM1638 module.
 const uint8_t NUM_DIGITS = 8;
@@ -45,67 +41,10 @@ const uint8_t NUM_BUTTONS = 8;
 // reuse the SPI pins used by the 74HC595 LED modules.
 //----------------------------------------------------------------------------
 
-// Configuration for Arduino IDE
-#if !defined(EPOXY_DUINO) && !defined(AUNITER)
-#define AUNITER_MICRO_TM1638
-#endif
-
-#if defined(EPOXY_DUINO)
-#define TMI_INTERFACE_TYPE TMI_INTERFACE_TYPE_FAST
-
-const uint8_t CLK_PIN = SCK;
-const uint8_t DIO_PIN = MOSI;
-const uint8_t STB_PIN = 10;
-
-#elif defined(AUNITER_MICRO_TM1638)
-#define TMI_INTERFACE_TYPE TMI_INTERFACE_TYPE_NORMAL
-
-const uint8_t CLK_PIN = SCK;
-const uint8_t DIO_PIN = MOSI;
-const uint8_t STB_PIN = 10;
-
-#elif defined(AUNITER_SAMD_TM1638)
-#define TMI_INTERFACE_TYPE TMI_INTERFACE_TYPE_NORMAL
-
-const uint8_t CLK_PIN = SCK;
-const uint8_t DIO_PIN = MOSI;
-const uint8_t STB_PIN = SS;
-
-#elif defined(AUNITER_STM32_TM1638)
-#define TMI_INTERFACE_TYPE TMI_INTERFACE_TYPE_NORMAL
-
-// This dev board uses the primary SPI1 pins.
-const uint8_t CLK_PIN = SCK;
-const uint8_t DIO_PIN = MOSI;
-const uint8_t STB_PIN = SS;
-
-// These are the secondary SPI2 pins for reference.
-// const uint8_t CLK_PIN = PB13;
-// const uint8_t DIO_PIN = PB15;
-// const uint8_t STB_PIN = PB12;
-
-#elif defined(AUNITER_D1MINI_LARGE_TM1638)
-#define TMI_INTERFACE_TYPE TMI_INTERFACE_TYPE_NORMAL
-
-const uint8_t CLK_PIN = SCK;
-const uint8_t DIO_PIN = MOSI;
-const uint8_t STB_PIN = SS;
-
-#elif defined(AUNITER_ESP32_TM1638)
-#define TMI_INTERFACE_TYPE TMI_INTERFACE_TYPE_NORMAL
 // This dev board uses the secondary HSPI pins.
 const uint8_t CLK_PIN = 14;
 const uint8_t DIO_PIN = 13;
 const uint8_t STB_PIN = 15;
-
-// These are the pimary VSPI pins for reference.
-// const uint8_t CLK_PIN = SCK;
-// const uint8_t DIO_PIN = MOSI;
-// const uint8_t STB_PIN = SS;
-
-#else
-#error Unknown AUNITER environment
-#endif
 
 //------------------------------------------------------------------
 // AceSegment Configuration
@@ -116,20 +55,9 @@ const uint8_t STB_PIN = 15;
 // the specs of the TM1638.
 const uint8_t DELAY_MICROS = 1;
 
-#if TMI_INTERFACE_TYPE == TMI_INTERFACE_TYPE_NORMAL
 using Tmi1638Interface = SimpleTmi1638Interface;
 Tmi1638Interface tmiInterface(DIO_PIN, CLK_PIN, STB_PIN, DELAY_MICROS);
-#elif TMI_INTERFACE_TYPE == TMI_INTERFACE_TYPE_FAST
-#include <digitalWriteFast.h>
-#include <ace_tmi/SimpleTmi1638FastInterface.h>
-using ace_tmi::SimpleTmi1638FastInterface;
 
-using Tmi1638Interface = SimpleTmi1638FastInterface<
-	DIO_PIN, CLK_PIN, STB_PIN, DELAY_MICROS>;
-Tmi1638Interface tmiInterface;
-#else
-#error Unknown TMI_INTERFACE_TYPE
-#endif
 
 Tm1638Module<Tmi1638Interface, NUM_DIGITS> ledModule(tmiInterface);
 
@@ -143,6 +71,7 @@ void setupAceSegment()
 
 const uint8_t kZeroPattern = 0b00111111;
 const uint8_t kOnePattern = 0b00000110;
+const uint8_t show_array[10] = {0x3F, 0x06, 0x5B, 0x4F, 0x66, 0x6D, 0x7D, 0x07, 0x7F, 0x6F};
 
 TimingStats stats;
 uint8_t digitIndex = 0;
@@ -222,8 +151,8 @@ void update()
 	{
 		prevFlushMillis = nowMillis;
 		uint32_t buttonCode = readButtons();
-		updateDisplay(buttonCode);
-		ledModule.flush();
+		// updateDisplay(buttonCode);
+		// ledModule.flush();
 	}
 }
 
@@ -253,6 +182,34 @@ void printStats()
 
 //-----------------------------------------------------------------------------
 
+#include <Ticker.h>
+
+Ticker periodicTicker;
+
+void periodicPrint()
+{
+	static uint32_t count = 0;
+	uint32_t show = count;
+	count += 1;
+	ledModule.setPatternAt(7, show_array[show % 10]);
+	show /= 10;
+	ledModule.setPatternAt(6, 0x80 | show_array[show % 10]);
+	show /= 10;
+	ledModule.setPatternAt(5, show_array[show % 10]);
+	show /= 10;
+	ledModule.setPatternAt(4, show_array[show % 10]);
+	show /= 10;
+	ledModule.setPatternAt(3, 0x80 | show_array[show % 10]);
+	show /= 10;
+	ledModule.setPatternAt(2, show_array[show % 10]);
+	show /= 10;
+	ledModule.setPatternAt(1, show_array[show % 10]);
+	show /= 10;
+	ledModule.setPatternAt(0, 0x80 | show_array[show % 10]);
+
+	ledModule.flush();
+}
+
 void setup()
 {
 	delay(1000);
@@ -265,6 +222,8 @@ void setup()
 
 	setupAceSegment();
 	ledModule.setBrightness(0);
+
+	periodicTicker.attach_ms(100, periodicPrint);
 }
 
 void loop()
